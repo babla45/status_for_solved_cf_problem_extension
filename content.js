@@ -221,6 +221,36 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   });
   if (pageUser === myUser) return;
 
+  // load stored compare list
+  let compareList = await new Promise(r=>{
+    chrome.storage.local.get(['compare_list'], d=>r(d.compare_list||[]));
+  });
+  // ensure primary user is first
+  if (!compareList.includes(myUser)) compareList.unshift(myUser);
+
+  // render checkbox to add/remove this profile
+  const ui = document.createElement('div');
+  ui.style = 'margin:10px 0';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.id = 'cf-compare-add';
+  cb.checked = compareList.includes(pageUser);
+  const label = document.createElement('label');
+  label.htmlFor = 'cf-compare-add';
+  label.textContent = ` Include ${pageUser} in comparison`;
+  ui.appendChild(cb);
+  ui.appendChild(label);
+  (document.querySelector('#pageContent')||document.body).appendChild(ui);
+  cb.addEventListener('change', () => {
+    if (cb.checked) {
+      compareList.push(pageUser);
+    } else {
+      compareList = compareList.filter(u=>u!==pageUser);
+    }
+    chrome.storage.local.set({compare_list: compareList});
+    location.reload();
+  });
+
   // fetch all problems → rating map
   const ratingMap = new Map();
   try {
@@ -228,98 +258,141 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     all.result.problems.forEach(p=>ratingMap.set(p.contestId+p.index, p.rating));
   } catch {}
 
-  // count solves by rating, dedupe each problem, return map + total
-  async function counts(user){
-    const cnt = new Map();
-    const seen = new Set();
-    const res = await fetch(
-      `https://codeforces.com/api/user.status?handle=${user}&from=1&count=10000`
-    ).then(r=>r.json());
-    res.result.forEach(s=>{
-      if (s.verdict==='OK'){
-        const key = s.problem.contestId + s.problem.index;
-        if (seen.has(key)) return;
-        seen.add(key);
-        const r = ratingMap.has(key) ? ratingMap.get(key) : 'Unknown';
-        cnt.set(r,(cnt.get(r)||0)+1);
-      }
-    });
-    return { cnt, total: seen.size };
+  // utility: delay ms
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
   }
 
-  const [res1, res2] = await Promise.all([counts(pageUser), counts(myUser)]);
-  const c1 = res1.cnt, c2 = res2.cnt;
-  const total1 = res1.total, total2 = res2.total;
+  // fetch or load cached counts
+  async function getCountsWithCache(user) {
+    const key = `cf_counts_${user}`;
+    // read cache
+    const cache = await new Promise(r => {
+      chrome.storage.local.get([key], data => r(data[key]));
+    });
+    const now = Date.now();
+    if (cache && cache.ts && now - cache.ts < 3600_000) {
+      // reconstruct Map from stored entries
+      const { cntEntries, total } = cache.data;
+      return { cnt: new Map(cntEntries), total };
+    }
+    // throttle between API calls
+    await sleep(300);
+    // actual fetch
+    const res = await fetch(
+      `https://codeforces.com/api/user.status?handle=${user}&from=1&count=10000`
+    ).then(r => r.json());
+    const cnt = new Map(), seen = new Set();
+    if (res.status === 'OK' && Array.isArray(res.result)) {
+      res.result.forEach(s => {
+        if (s.verdict === 'OK') {
+          const keyp = s.problem.contestId + s.problem.index;
+          if (seen.has(keyp)) return;
+          seen.add(keyp);
+          const r = ratingMap.has(keyp) ? ratingMap.get(keyp) : 'Unknown';
+          cnt.set(r, (cnt.get(r) || 0) + 1);
+        }
+      });
+    }
+    const total = seen.size;
+    // store entries array + total
+    const storeData = { cntEntries: Array.from(cnt.entries()), total };
+    chrome.storage.local.set({ [key]: { ts: now, data: storeData } });
+    return { cnt, total };
+  }
 
-  // merge ratings, sorting numeric and appending "Unknown" last
-  const allKeys = [...new Set([...c1.keys(), ...c2.keys()])];
-  const nums = allKeys.filter(x=>typeof x==='number').sort((a,b)=>a-b);
-  const ratings = allKeys.includes('Unknown') ? [...nums,'Unknown'] : nums;
+  // gather counts for each user in list, sequentially
+  const results = [];
+  for (const u of compareList) {
+    const d = await getCountsWithCache(u);
+    results.push(d);
+  }
+
+  // merge ratings keys
+  const allKeys = [
+    ...new Set(
+      results.flatMap(r => [...r.cnt.keys()])
+    )
+  ];
+  const nums = allKeys.filter(x => typeof x === 'number').sort((a, b) => a - b);
+  const ratings = allKeys.includes('Unknown') ? [...nums, 'Unknown'] : nums;
 
   // build table
   const tbl = document.createElement('table');
   tbl.style = 'width:100%;border:1px solid #ccc;border-collapse:collapse;margin:1em 0';
 
-  // mkRow now takes a total parameter
-  function mkRow(label, map, total, bgColor){
-    const tr = document.createElement('tr');
-    tr.style.backgroundColor = bgColor;
-    const td0 = document.createElement('td');
-    td0.textContent = label;
-    td0.style = 'border:1px solid #ccc;padding:4px;font-weight:bold';
+  // header
+  const hdr = document.createElement('tr');
+  hdr.style.backgroundColor = '#adb5bd';
+  hdr.appendChild((()=>{const td=document.createElement('td');td.textContent='Rating';td.style='border:1px solid #ccc;padding:4px;font-weight:bold';return td;})());
+  ratings.forEach(r=>{
+    const td=document.createElement('td');
+    td.textContent=r.toString();
+    td.style='border:1px solid #ccc;padding:4px;text-align:center';
+    hdr.appendChild(td);
+  });
+  const tdTotHdr=document.createElement('td');
+  tdTotHdr.textContent='Total';
+  tdTotHdr.style='border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
+  hdr.appendChild(tdTotHdr);
+  const tdExHdr = document.createElement('td');
+  tdExHdr.textContent = 'Exclude';
+  tdExHdr.style = 'border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
+  hdr.appendChild(tdExHdr);
+  tbl.appendChild(hdr);
+
+  // colors for rows
+  const colors = ['#d1e7ff','#fff3cd','#d4edda','#f8d7da','#e2e3e5'];
+  // mkRow
+  function mkRow(user, {cnt,total}, bgColor){
+    const tr=document.createElement('tr');
+    tr.style.backgroundColor=bgColor;
+    const td0=document.createElement('td');
+    td0.textContent=user;
+    td0.style='border:1px solid #ccc;padding:4px;font-weight:bold';
     tr.appendChild(td0);
     ratings.forEach(r=>{
-      const td = document.createElement('td');
-      td.textContent = map.get(r) || 0;
-      td.style = 'border:1px solid #ccc;padding:4px;text-align:center';
+      const td=document.createElement('td');
+      td.textContent=cnt.get(r)||0;
+      td.style='border:1px solid #ccc;padding:4px;text-align:center';
       tr.appendChild(td);
     });
-    // use total from seen.size
-    const tdTotal = document.createElement('td');
-    tdTotal.textContent = total;
-    tdTotal.style = 'border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
-    tr.appendChild(tdTotal);
+    const tdTot=document.createElement('td');
+    tdTot.textContent=total;
+    tdTot.style='border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
+    tr.appendChild(tdTot);
+
+    // Exclude button cell
+    const tdEx = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.textContent = 'Remove';
+    btn.style = 'padding:2px 6px;font-size:12px;cursor:pointer';
+    btn.addEventListener('click', () => {
+      compareList = compareList.filter(u => u !== user);
+      chrome.storage.local.set({compare_list: compareList});
+      location.reload();
+    });
+    tdEx.appendChild(btn);
+    tdEx.style = 'border:1px solid #ccc;padding:4px;text-align:center';
+    tr.appendChild(tdEx);
+
     return tr;
   }
 
-  // header row of ratings + Total
-  const hdr = document.createElement('tr');
-  hdr.style.backgroundColor = '#adb5bd';  // darker gray
-  hdr.appendChild((()=>{
-    const td=document.createElement('td');
-    td.textContent='Rating';
-    td.style='border:1px solid #ccc;padding:4px;font-weight:bold';
-    return td;
-  })());
-  ratings.forEach(r=>{
-    const td = document.createElement('td');
-    td.textContent = r.toString();
-    td.style = 'border:1px solid #ccc;padding:4px;text-align:center';
-    hdr.appendChild(td);
-  });
-  // add Total header
-  const tdTotHdr = document.createElement('td');
-  tdTotHdr.textContent = 'Total';
-  tdTotHdr.style = 'border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
-  hdr.appendChild(tdTotHdr);
-
   // append rows
-  tbl.appendChild(mkRow(pageUser, c1, total1, '#d1e7ff'));
-  tbl.appendChild(mkRow(myUser, c2, total2, '#fff3cd'));
-  tbl.appendChild(hdr);
+  compareList.forEach((u,i)=>{
+    tbl.appendChild(mkRow(u, results[i], colors[i%colors.length]));
+  });
 
-  // append below main content
-  const container = document.createElement('div');
-  // allow horizontal scroll if table is too wide
-  container.style = 'background:#f9f9f9;padding:10px;overflow-x:auto;';
-
-  const title = document.createElement('h4');
-  title.textContent = `Solved count by rating: ${pageUser} vs ${myUser}`;
-  title.style = 'margin:0 0 .5em';
+  // wrap and display
+  const container=document.createElement('div');
+  container.style='background:#f9f9f9;padding:10px;overflow-x:auto';
+  const title=document.createElement('h4');
+  title.textContent=`Solved count by rating: ${compareList.join(' vs ')}`;
+  title.style='margin:0 0 .5em';
   container.appendChild(title);
-  // wrap table in a block so overflow-x works
-  tbl.style.display = 'block';
-  tbl.style.width = 'max-content';
+  tbl.style.display='block';
+  tbl.style.width='max-content';
   container.appendChild(tbl);
   (document.querySelector('#pageContent')||document.body).appendChild(container);
 })();
