@@ -1,9 +1,11 @@
 console.log('Content script loaded, current pathname:', window.location.pathname);
 
+// Check if this is ANY submissions page (for any user)
 if (window.location.pathname.includes('/submissions/')) {
-  console.log('Detected submissions page');
+  console.log('Detected submissions page for any user');
   
   (async function () {
+    // Always check solved status for b_i_b, regardless of whose submissions we're viewing
     const username = "b_i_b";
     let solvedSet = new Set();
     
@@ -18,7 +20,7 @@ if (window.location.pathname.includes('/submissions/')) {
           }
         }
       }
-      console.log('Solved problems loaded:', solvedSet.size);
+      console.log('Solved problems loaded for b_i_b:', solvedSet.size);
     } catch (e) {
       console.error('Error fetching solved problems:', e);
       return;
@@ -68,8 +70,10 @@ if (window.location.pathname.includes('/submissions/')) {
       const href = link.getAttribute('href');
       console.log('Processing link:', href);
       
-      // Match contest problem URLs like /contest/2112/problem/B
-      const match = href && href.match(/\/contest\/(\d+)\/problem\/([A-Z0-9]+)/);
+      // Match both contest and gym problem URLs
+      // Contest: /contest/2125/problem/A
+      // Gym: /gym/105242/problem/G
+      const match = href && href.match(/\/(?:contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/);
       if (!match) {
         console.log('No match for href:', href);
         return;
@@ -79,7 +83,7 @@ if (window.location.pathname.includes('/submissions/')) {
       const problemIndex = match[2];
       const problemKey = contestId + problemIndex;
       
-      console.log('Problem key:', problemKey, 'Solved:', solvedSet.has(problemKey));
+      console.log('Problem key:', problemKey, 'Solved by b_i_b:', solvedSet.has(problemKey));
       
       const span = document.createElement('span');
       span.className = 'cf-solved-indicator';
