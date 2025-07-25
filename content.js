@@ -5,8 +5,14 @@ if (window.location.pathname.includes('/submissions/')) {
   console.log('Detected submissions page for any user');
   
   (async function () {
-    // Always check solved status for b_i_b, regardless of whose submissions we're viewing
-    const username = "b_i_b";
+    // Get username from storage, default to b_i_b
+    const username = await new Promise(resolve => {
+      chrome.storage.sync.get(['cf_username'], function(result) {
+        resolve(result.cf_username || 'b_i_b');
+      });
+    });
+    
+    console.log('Using username:', username);
     let solvedSet = new Set();
     
     try {
@@ -20,7 +26,7 @@ if (window.location.pathname.includes('/submissions/')) {
           }
         }
       }
-      console.log('Solved problems loaded for b_i_b:', solvedSet.size);
+      console.log('Solved problems loaded for', username + ':', solvedSet.size);
     } catch (e) {
       console.error('Error fetching solved problems:', e);
       return;
@@ -71,8 +77,6 @@ if (window.location.pathname.includes('/submissions/')) {
       console.log('Processing link:', href);
       
       // Match both contest and gym problem URLs
-      // Contest: /contest/2125/problem/A
-      // Gym: /gym/105242/problem/G
       const match = href && href.match(/\/(?:contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/);
       if (!match) {
         console.log('No match for href:', href);
@@ -83,7 +87,7 @@ if (window.location.pathname.includes('/submissions/')) {
       const problemIndex = match[2];
       const problemKey = contestId + problemIndex;
       
-      console.log('Problem key:', problemKey, 'Solved by b_i_b:', solvedSet.has(problemKey));
+      console.log('Problem key:', problemKey, 'Solved by', username + ':', solvedSet.has(problemKey));
       
       const span = document.createElement('span');
       span.className = 'cf-solved-indicator';
@@ -93,11 +97,11 @@ if (window.location.pathname.includes('/submissions/')) {
       if (solvedSet.has(problemKey)) {
         span.textContent = '✓';
         span.style.color = 'green';
-        span.title = 'Solved by b_i_b';
+        span.title = `Solved by ${username}`;
       } else {
         span.textContent = '✗';
         span.style.color = 'red';
-        span.title = 'Not solved by b_i_b';
+        span.title = `Not solved by ${username}`;
       }
       
       link.appendChild(span);
