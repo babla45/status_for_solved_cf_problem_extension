@@ -1,11 +1,12 @@
 # Codeforces Solved Status Extension
 
-A Chrome extension that shows whether problems have been solved by a specific user on Codeforces submission pages.
+A Chrome extension that shows whether problems have been solved by a specific user on Codeforces submission pages and problemset pages.
 
 ## Features
 
 - **Multi-user support**: Check solved status for any Codeforces user
 - **Submissions page integration**: Works on any user's submissions page
+- **Problemset page integration**: Works on the main problemset page showing all problems
 - **Visual indicators**: Green ✓ for solved problems, Red ✗ for unsolved problems
 - **Contest and Gym support**: Shows status for both contest and gym problems (gym status may be limited due to API restrictions)
 - **Configurable username**: Easy-to-use popup interface for changing the target user
@@ -28,8 +29,9 @@ A Chrome extension that shows whether problems have been solved by a specific us
 4. All Codeforces tabs will automatically reload with the new user settings
 
 ### Viewing Status
-1. Go to any user's submissions page on Codeforces:
-   - `https://codeforces.com/submissions/username`
+1. Go to any supported Codeforces page:
+   - **Submissions pages**: `https://codeforces.com/submissions/username`
+   - **Problemset page**: `https://codeforces.com/problemset`
    - Example: `https://codeforces.com/submissions/b_i_b`
 2. The extension will automatically show indicators next to each problem:
    - **Green ✓**: Problem solved by the configured user
@@ -38,6 +40,7 @@ A Chrome extension that shows whether problems have been solved by a specific us
 
 ### Supported Pages
 - User submissions pages: `/submissions/username`
+- Problemset page: `/problemset`
 - Works for any username, including special characters like `uf982`, `b_i_b`, etc.
 
 ## How It Works
@@ -83,7 +86,9 @@ The extension stores the following data:
 3. Check browser console for error messages
 
 ### No Indicators Showing
-1. Verify you're on a submissions page (`/submissions/username`)
+1. Verify you're on a supported page:
+   - Submissions page (`/submissions/username`)
+   - Problemset page (`/problemset`)
 2. Check if the configured username exists and has solved problems
 3. Ensure you have internet connection for API calls
 
@@ -112,6 +117,10 @@ Feel free to contribute to this project by:
 This project is open source and available under the MIT License.
 
 ## Changelog
+
+### Version 1.1
+- Added support for problemset page (`/problemset`)
+- Enhanced problem detection for different page layouts
 
 ### Version 1.0
 - Initial release
