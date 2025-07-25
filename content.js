@@ -32,6 +32,20 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
       return;
     }
 
+    // Fetch all problems once to build a rating map
+    let ratingMap = new Map();
+    try {
+        const respAll = await fetch('https://codeforces.com/api/problemset.problems');
+        const dataAll = await respAll.json();
+        if (dataAll.status === 'OK') {
+            for (const p of dataAll.result.problems) {
+                ratingMap.set(p.contestId + p.index, p.rating);
+            }
+        }
+    } catch (e) {
+        console.error('Error fetching problem list:', e);
+    }
+
     // Wait for DOM to be ready and table to load
     function waitForElements() {
       return new Promise((resolve) => {
@@ -124,7 +138,7 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
         console.log('Added indicator for:', problemKey);
       });
     } else {
-      // Handle submissions page (existing code)
+      // Handle submissions page
       const table = document.querySelector('table.status-frame-datatable');
       if (!table) {
         console.log('No submissions table found');
@@ -144,15 +158,21 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
         const href = link.getAttribute('href');
         console.log('Processing link:', href);
         
-        // Match both contest and gym problem URLs
-        const match = href && href.match(/\/(?:contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/);
-        if (!match) {
-          console.log('No match for href:', href);
-          return;
+        // Match problemset or contest/gym URLs
+        let match = href.match(/\/problemset\/problem\/(\d+)\/([A-Z0-9]+)/);
+        let contestId, problemIndex;
+        if (match) {
+          contestId = match[1];
+          problemIndex = match[2];
+        } else {
+          match = href.match(/\/(?:contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/);
+          if (!match) {
+            console.log('No match for href:', href);
+            return;
+          }
+          contestId = match[1];
+          problemIndex = match[2];
         }
-        
-        const contestId = match[1];
-        const problemIndex = match[2];
         const problemKey = contestId + problemIndex;
         
         console.log('Problem key:', problemKey, 'Solved by', username + ':', solvedSet.has(problemKey));
@@ -173,6 +193,16 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
         }
         
         link.appendChild(span);
+        // add rating display
+        const rating = ratingMap.get(problemKey);
+        if (rating) {
+            const rspan = document.createElement('span');
+            rspan.className = 'cf-solved-rating';
+            rspan.style.marginLeft = '5px';
+            rspan.style.color = 'purple'; // Changed to purple for better visibility
+            rspan.textContent = `[${rating}]`;
+            link.appendChild(rspan);
+        }
         console.log('Added indicator for:', problemKey);
       });
     }
