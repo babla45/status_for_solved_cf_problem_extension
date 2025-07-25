@@ -211,3 +211,80 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   })();
 }
 
+// Inject comparison table on profile pages
+(async function(){
+  const m = location.pathname.match(/^\/profile\/([^\/]+)/);
+  if (!m) return;
+  const pageUser = m[1];
+  const myUser = await new Promise(r=>{
+    chrome.storage.sync.get(['cf_username'], d=>r(d.cf_username||'b_i_b'));
+  });
+  if (pageUser === myUser) return;
+
+  // fetch all problems → rating map
+  const ratingMap = new Map();
+  try {
+    const all = await fetch('https://codeforces.com/api/problemset.problems').then(r=>r.json());
+    all.result.problems.forEach(p=>ratingMap.set(p.contestId+p.index, p.rating));
+  } catch {}
+
+  // count solves by rating
+  async function counts(user){
+    const cnt = new Map();
+    const res = await fetch(
+      `https://codeforces.com/api/user.status?handle=${user}&from=1&count=10000`
+    ).then(r=>r.json());
+    res.result.forEach(s=>{
+      if (s.verdict==='OK'){
+        const key = s.problem.contestId + s.problem.index;
+        const r = ratingMap.get(key);
+        if (r) cnt.set(r,(cnt.get(r)||0)+1);
+      }
+    });
+    return cnt;
+  }
+
+  const [c1,c2] = await Promise.all([counts(pageUser), counts(myUser)]);
+  const ratings = [...new Set([...c1.keys(),...c2.keys()])].sort((a,b)=>a-b);
+
+  // build table
+  const tbl = document.createElement('table');
+  tbl.style = 'width:100%;border:1px solid #ccc;border-collapse:collapse;margin:1em 0';
+  function mkRow(label,map){
+    const tr = document.createElement('tr');
+    const td0 = document.createElement('td');
+    td0.textContent = label;
+    td0.style = 'border:1px solid #ccc;padding:4px;font-weight:bold';
+    tr.appendChild(td0);
+    ratings.forEach(r=>{
+      const td = document.createElement('td');
+      td.textContent = map.get(r)||0;
+      td.style = 'border:1px solid #ccc;padding:4px;text-align:center';
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+  // header row of ratings
+  const hdr = document.createElement('tr');
+  hdr.appendChild((()=>{ const td=document.createElement('td'); td.textContent='Rating'; td.style='border:1px solid #ccc;padding:4px;font-weight:bold'; return td; })());
+  ratings.forEach(r=>{
+    const td = document.createElement('td');
+    td.textContent = r;
+    td.style = 'border:1px solid #ccc;padding:4px;text-align:center';
+    hdr.appendChild(td);
+  });
+  tbl.appendChild(mkRow(pageUser, c1));
+  tbl.appendChild(mkRow(myUser, c2));
+  tbl.appendChild(hdr);
+
+  // append below main content
+  const container = document.createElement('div');
+  container.style = 'background:#f9f9f9;padding:10px';
+  const title = document.createElement('h4');
+  title.textContent = `Solved count by rating: ${pageUser} vs ${myUser}`;
+  title.style = 'margin:0 0 .5em';
+  container.appendChild(title);
+  container.appendChild(tbl);
+  (document.querySelector('#pageContent')||document.body).appendChild(container);
+})();
+
