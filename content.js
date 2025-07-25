@@ -228,62 +228,98 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     all.result.problems.forEach(p=>ratingMap.set(p.contestId+p.index, p.rating));
   } catch {}
 
-  // count solves by rating
+  // count solves by rating, dedupe each problem, return map + total
   async function counts(user){
     const cnt = new Map();
+    const seen = new Set();
     const res = await fetch(
       `https://codeforces.com/api/user.status?handle=${user}&from=1&count=10000`
     ).then(r=>r.json());
     res.result.forEach(s=>{
       if (s.verdict==='OK'){
         const key = s.problem.contestId + s.problem.index;
-        const r = ratingMap.get(key);
-        if (r) cnt.set(r,(cnt.get(r)||0)+1);
+        if (seen.has(key)) return;
+        seen.add(key);
+        const r = ratingMap.has(key) ? ratingMap.get(key) : 'Unknown';
+        cnt.set(r,(cnt.get(r)||0)+1);
       }
     });
-    return cnt;
+    return { cnt, total: seen.size };
   }
 
-  const [c1,c2] = await Promise.all([counts(pageUser), counts(myUser)]);
-  const ratings = [...new Set([...c1.keys(),...c2.keys()])].sort((a,b)=>a-b);
+  const [res1, res2] = await Promise.all([counts(pageUser), counts(myUser)]);
+  const c1 = res1.cnt, c2 = res2.cnt;
+  const total1 = res1.total, total2 = res2.total;
+
+  // merge ratings, sorting numeric and appending "Unknown" last
+  const allKeys = [...new Set([...c1.keys(), ...c2.keys()])];
+  const nums = allKeys.filter(x=>typeof x==='number').sort((a,b)=>a-b);
+  const ratings = allKeys.includes('Unknown') ? [...nums,'Unknown'] : nums;
 
   // build table
   const tbl = document.createElement('table');
   tbl.style = 'width:100%;border:1px solid #ccc;border-collapse:collapse;margin:1em 0';
-  function mkRow(label,map){
+
+  // mkRow now takes a total parameter
+  function mkRow(label, map, total, bgColor){
     const tr = document.createElement('tr');
+    tr.style.backgroundColor = bgColor;
     const td0 = document.createElement('td');
     td0.textContent = label;
     td0.style = 'border:1px solid #ccc;padding:4px;font-weight:bold';
     tr.appendChild(td0);
     ratings.forEach(r=>{
       const td = document.createElement('td');
-      td.textContent = map.get(r)||0;
+      td.textContent = map.get(r) || 0;
       td.style = 'border:1px solid #ccc;padding:4px;text-align:center';
       tr.appendChild(td);
     });
+    // use total from seen.size
+    const tdTotal = document.createElement('td');
+    tdTotal.textContent = total;
+    tdTotal.style = 'border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
+    tr.appendChild(tdTotal);
     return tr;
   }
-  // header row of ratings
+
+  // header row of ratings + Total
   const hdr = document.createElement('tr');
-  hdr.appendChild((()=>{ const td=document.createElement('td'); td.textContent='Rating'; td.style='border:1px solid #ccc;padding:4px;font-weight:bold'; return td; })());
+  hdr.style.backgroundColor = '#adb5bd';  // darker gray
+  hdr.appendChild((()=>{
+    const td=document.createElement('td');
+    td.textContent='Rating';
+    td.style='border:1px solid #ccc;padding:4px;font-weight:bold';
+    return td;
+  })());
   ratings.forEach(r=>{
     const td = document.createElement('td');
-    td.textContent = r;
+    td.textContent = r.toString();
     td.style = 'border:1px solid #ccc;padding:4px;text-align:center';
     hdr.appendChild(td);
   });
-  tbl.appendChild(mkRow(pageUser, c1));
-  tbl.appendChild(mkRow(myUser, c2));
+  // add Total header
+  const tdTotHdr = document.createElement('td');
+  tdTotHdr.textContent = 'Total';
+  tdTotHdr.style = 'border:1px solid #ccc;padding:4px;text-align:center;font-weight:bold';
+  hdr.appendChild(tdTotHdr);
+
+  // append rows
+  tbl.appendChild(mkRow(pageUser, c1, total1, '#d1e7ff'));
+  tbl.appendChild(mkRow(myUser, c2, total2, '#fff3cd'));
   tbl.appendChild(hdr);
 
   // append below main content
   const container = document.createElement('div');
-  container.style = 'background:#f9f9f9;padding:10px';
+  // allow horizontal scroll if table is too wide
+  container.style = 'background:#f9f9f9;padding:10px;overflow-x:auto;';
+
   const title = document.createElement('h4');
   title.textContent = `Solved count by rating: ${pageUser} vs ${myUser}`;
   title.style = 'margin:0 0 .5em';
   container.appendChild(title);
+  // wrap table in a block so overflow-x works
+  tbl.style.display = 'block';
+  tbl.style.width = 'max-content';
   container.appendChild(tbl);
   (document.querySelector('#pageContent')||document.body).appendChild(container);
 })();
