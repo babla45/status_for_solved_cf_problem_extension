@@ -430,18 +430,61 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   const nums = allKeys.filter(x => typeof x === 'number').sort((a, b) => a - b);
   const ratings = allKeys.includes('Unknown') ? [...nums, 'Unknown'] : nums;
 
-  // build table with improved styling
+  // build table with improved styling and sticky first column
   const tbl = document.createElement('table');
-  tbl.style = 'width:100%; border:1px solid #ccc; border-collapse:collapse; margin:1em 0; box-shadow:0 1px 3px rgba(0,0,0,0.1);';
+  tbl.style = `
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    position: relative;
+  `;
+
+  // Add style for sticky first column with improved positioning
+  const styleTag = document.createElement('style');
+  styleTag.textContent = `
+    @keyframes textShimmer {
+      to { background-position: 200% center; }
+    }
+    
+    .sticky-column {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      /* Add subtle shadow to indicate stickiness */
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+    
+    /* Add a container for the table with proper overflow handling */
+    .cf-compare-table-container {
+      width: 100%;
+      overflow-x: auto;
+      position: relative;
+      border-radius: 4px;
+    }
+  `;
+  document.head.appendChild(styleTag);
+
+  // Create a dedicated container for the table to control scroll behavior
+  const tableContainer = document.createElement('div');
+  tableContainer.className = 'cf-compare-table-container';
 
   // header with better styling
   const hdr = document.createElement('tr');
   hdr.style.backgroundColor = '#4a69bd'; // Darker blue header
   
-  // User column header
+  // User column header - make sticky
   const thUser = document.createElement('th');
-  thUser.textContent = 'User';
-  thUser.style = 'border:1px solid #ccc; padding:8px; text-align:left; color:white; font-weight:bold;';
+  thUser.textContent = 'Users ⬇';
+  thUser.className = 'sticky-column';
+  thUser.style = `
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+    color: white;
+    font-weight: bold;
+    background-color: #4a69bd; /* Match header color */
+  `;
   hdr.appendChild(thUser);
   
   // Rating column headers
@@ -474,23 +517,49 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   // Colors for rows - restore the previous colors
   const colors = ['#d1e7ff','#fff3cd','#d4edda','#f8d7da','#e2e3e5'];
   
-  // mkRow with hover effect and better styling
+  // mkRow with improved hover effect and better styling
   function mkRow(user, {cnt,total}, idx) {
     const bgColor = colors[idx % colors.length];
     const tr = document.createElement('tr');
-    tr.style = `background-color:${bgColor}; transition:background-color 0.2s;`;
+    tr.style = `
+      background-color:${bgColor}; 
+      transition: all 0.2s ease-in-out;
+    `;
     
-    // Add hover effect
+    // Add improved hover effect with more subtle highlight
     tr.addEventListener('mouseover', () => {
-      tr.style.backgroundColor = '#e8f4f8';
+      // Slightly darken the existing background color rather than replacing it
+      tr.style.backgroundColor = adjustColor(bgColor, -15);
+      tr.style.boxShadow = 'inset 0 0 0 1px rgba(0,0,0,0.1)';
+      
+      // Also update sticky cell background on hover to match
+      if (td0) {
+        td0.style.backgroundColor = adjustColor(bgColor, -15);
+        td0.style.boxShadow = '2px 0 5px rgba(0,0,0,0.15)';
+      }
     });
+    
     tr.addEventListener('mouseout', () => {
       tr.style.backgroundColor = bgColor;
+      tr.style.boxShadow = 'none';
+      
+      // Reset sticky cell background on mouseout
+      if (td0) {
+        td0.style.backgroundColor = bgColor;
+        td0.style.boxShadow = '2px 0 5px rgba(0,0,0,0.1)';
+      }
     });
     
-    // User cell with colored username matching the title
+    // User cell with colored username matching the title - make sticky
     const td0 = document.createElement('td');
-    td0.style = `border:1px solid #ccc; padding:8px; font-weight:bold; color:${handleColors[idx % handleColors.length]};`;
+    td0.className = 'sticky-column';
+    td0.style = `
+      border: 1px solid #ccc;
+      padding: 8px;
+      font-weight: bold;
+      color: ${handleColors[idx % handleColors.length]};
+      background-color: ${bgColor}; /* Match row color */
+    `;
     td0.textContent = user;
     tr.appendChild(td0);
     
@@ -545,6 +614,46 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     tr.appendChild(tdEx);
     return tr;
   }
+  
+  // Helper function to darken or lighten a color
+  function adjustColor(color, amount) {
+    // Convert hex to RGB first if needed
+    if (color.startsWith('#')) {
+      let hex = color.slice(1);
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return adjustRgbColor(r, g, b, amount);
+    }
+    
+    // Handle rgb/rgba format
+    const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+    if (rgbMatch) {
+      const r = parseInt(rgbMatch[1], 10);
+      const g = parseInt(rgbMatch[2], 10);
+      const b = parseInt(rgbMatch[3], 10);
+      return adjustRgbColor(r, g, b, amount);
+    }
+    
+    return color; // Return original if format not recognized
+  }
+  
+  function adjustRgbColor(r, g, b, amount) {
+    // Adjust each component and clamp to valid range
+    const adjustComponent = c => Math.max(0, Math.min(255, c + amount));
+    return `rgb(${adjustComponent(r)}, ${adjustComponent(g)}, ${adjustComponent(b)})`;
+  }
+
+  // Update the table style to ensure consistent hover timing
+  const styleTag3 = document.createElement('style');
+  styleTag3.textContent = `
+    .cf-compare-table-container tr,
+    .cf-compare-table-container td,
+    .cf-compare-table-container .sticky-column {
+      transition: all 0.2s ease-in-out;
+    }
+  `;
+  document.head.appendChild(styleTag3);
 
   // Append rows and log any errors
   compareList.forEach((u, i) => {
@@ -562,56 +671,63 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
 
   // Add the title above table with colored handles
   const title = document.createElement('div');
-  title.style = 'margin:0 0 1em; font-size:16px; font-weight:bold; display:flex; flex-wrap:wrap; align-items:center; gap:8px';
+  title.style = 'margin:0 0 1em; font-size:16px; font-weight:bold; display:flex; flex-wrap:wrap; align-items:center;';
+  
+  // Create container for the gradient text
+  const gradientContainer = document.createElement('div');
+  gradientContainer.style = `
+    background: linear-gradient(45deg, #1d99ecff, #0cf465ff, #6e0779ff, #3c09f4ff, #ff0000ff);
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: textShimmer 7s linear infinite;
+    font-weight: bold;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  `;
   
   const titlePrefix = document.createElement('span');
   titlePrefix.textContent = 'Solved count comparison by rating: ';
-  title.appendChild(titlePrefix);
+  gradientContainer.appendChild(titlePrefix);
   
-  // Create separate colored spans for each handle
+  // Create separate spans for each handle
   compareList.forEach((handle, idx) => {
     const handleSpan = document.createElement('span');
     handleSpan.textContent = handle;
-    handleSpan.style.color = handleColors[idx % handleColors.length];
     handleSpan.style.fontWeight = 'bold';
-    title.appendChild(handleSpan);
+    gradientContainer.appendChild(handleSpan);
     
     // Add "vs" between handles (but not after the last one)
     if (idx < compareList.length - 1) {
       const vs = document.createElement('span');
       vs.textContent = 'vs';
-      vs.style.color = '#666';
       vs.style.fontWeight = 'normal';
       vs.style.fontSize = '14px';
-      title.appendChild(vs);
+      gradientContainer.appendChild(vs);
     }
   });
   
-  // Apply gradient color to the title prefix
-  titlePrefix.style = `
-    background: linear-gradient(45deg, #3498db, #9b59b6, #e74c3c);
-    background-size: 200% auto;
-    color: transparent;
-    -webkit-background-clip: text;
-    background-clip: text;
-    font-weight: bold;
-    animation: textShimmer 3s linear infinite;
-  `;
+  // Add the gradient container to title
+  title.appendChild(gradientContainer);
   
-  // Add animation for gradient flow
-  const styleTag = document.createElement('style');
-  styleTag.textContent = `
+  // Add animation for gradient flow (we can use the existing one)
+  const styleTag2 = document.createElement('style');
+  styleTag2.textContent = `
     @keyframes textShimmer {
       to { background-position: 200% center; }
     }
   `;
-  document.head.appendChild(styleTag);
+  document.head.appendChild(styleTag2);
   
   // Add title before table
   wrapper.appendChild(title);
   
   // Make sure table is appended to wrapper after title
-  wrapper.appendChild(tbl);
+  tableContainer.appendChild(tbl);
+  wrapper.appendChild(tableContainer);
 
   // finally insert the unified wrapper into the page
   const insertPoint = document.querySelector('#pageContent') || document.body;
