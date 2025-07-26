@@ -729,6 +729,72 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   tableContainer.appendChild(tbl);
   wrapper.appendChild(tableContainer);
 
+  // Add tooltip functionality
+  const tooltipStyle = document.createElement('style');
+  tooltipStyle.textContent = `
+    .cf-handle-tooltip {
+      position: fixed;
+      background: linear-gradient(45deg, #3498db, #9b59b6);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      z-index: 10000;
+      pointer-events: none;
+      font-size: 16px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      white-space: nowrap;
+      display: none;
+    }
+  `;
+  document.head.appendChild(tooltipStyle);
+  
+  // Create tooltip element
+  const tooltip = document.createElement('div');
+  tooltip.className = 'cf-handle-tooltip';
+  document.body.appendChild(tooltip);
+  
+  // Add data attributes to existing rows for tooltip
+  const rows = tbl.querySelectorAll('tr');
+  rows.forEach((row, i) => {
+    if (i > 0 && i-1 < compareList.length) { // Skip header row
+      const user = compareList[i-1];
+      const color = handleColors[(i-1) % handleColors.length];
+      row.dataset.handle = user;
+      row.dataset.color = color;
+    }
+  });
+
+  // Add tooltip event handlers
+  tableContainer.addEventListener('mouseover', function(e) {
+    const row = e.target.closest('tr');
+    if (row && row.dataset && row.dataset.handle) {
+      const handle = row.dataset.handle;
+      const color = row.dataset.color || '#3498db';
+      
+      tooltip.textContent = handle;
+      tooltip.style.background = `linear-gradient(45deg, ${color}, ${adjustColor(color, 30)})`;
+      tooltip.style.display = 'block';
+      
+      tooltip.style.left = `${e.clientX + 20}px`;
+      tooltip.style.top = `${e.clientY - 10}px`;
+    }
+  });
+  
+  tableContainer.addEventListener('mousemove', function(e) {
+    if (tooltip.style.display === 'block') {
+      tooltip.style.left = `${e.clientX + 20}px`;
+      tooltip.style.top = `${e.clientY - 10}px`;
+    }
+  });
+  
+  tableContainer.addEventListener('mouseout', function(e) {
+    if (!tableContainer.contains(e.relatedTarget)) {
+      tooltip.style.display = 'none';
+    }
+  });
+
   // finally insert the unified wrapper into the page
   const insertPoint = document.querySelector('#pageContent') || document.body;
   insertPoint.appendChild(wrapper);
