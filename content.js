@@ -217,7 +217,7 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   if (!m) return;
   const pageUser = m[1];
   const myUser = await new Promise(r=>{ chrome.storage.sync.get(['cf_username'], d=>r(d.cf_username||'b_i_b')); });
-  if (pageUser === myUser) return;
+  // if (pageUser === myUser) return;
 
   // load stored compare list
   let compareList = await new Promise(r=>{ chrome.storage.local.get(['compare_list'], d=>r(d.compare_list||[])); });
