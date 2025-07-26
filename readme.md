@@ -8,6 +8,9 @@ A Chrome extension that shows whether problems have been solved by a specific us
 - **Submissions page integration**: Works on any user's submissions page
 - **Problemset page integration**: Works on the main problemset page showing all problems
 - **Visual indicators**: Green ✓ for solved problems, Red ✗ for unsolved problems
+- **Problem ratings**: Shows the difficulty rating of problems in submissions pages
+- **User comparison**: Compare solved problems across multiple users by rating
+- **Profile integration**: Add users to comparison directly from their profile pages
 - **Contest and Gym support**: Shows status for both contest and gym problems (gym status may be limited due to API restrictions)
 - **Configurable username**: Easy-to-use popup interface for changing the target user
 - **Performance optimized**: Uses caching to minimize API calls
@@ -36,11 +39,23 @@ A Chrome extension that shows whether problems have been solved by a specific us
 2. The extension will automatically show indicators next to each problem:
    - **Green ✓**: Problem solved by the configured user
    - **Red ✗**: Problem not solved by the configured user
-   - **Orange ?**: Gym problem (status may be unknown due to API limitations)
+   - **Purple [Rating]**: Shows the problem's difficulty rating
+
+### User Comparison
+1. Navigate to any Codeforces user profile page (e.g., `https://codeforces.com/profile/tourist`)
+2. You'll see a comparison panel with options to:
+   - Include/exclude the current profile user in comparison
+   - Add multiple handles via the "Add multiple handles" button
+   - View a color-coded comparison table showing solved problems by rating
+3. The comparison table shows:
+   - Number of problems solved by each user, grouped by rating
+   - Total solved count for each user
+   - Option to remove users from comparison
 
 ### Supported Pages
 - User submissions pages: `/submissions/username`
 - Problemset page: `/problemset`
+- Profile pages: `/profile/username` (for comparison feature)
 - Works for any username, including special characters like `uf982`, `b_i_b`, etc.
 
 ## How It Works
@@ -48,7 +63,8 @@ A Chrome extension that shows whether problems have been solved by a specific us
 1. **API Integration**: Uses the Codeforces API (`/api/user.status`) to fetch solved problems for the configured user
 2. **DOM Analysis**: Scans submission tables for problem links and matches them against the solved problems list
 3. **Visual Enhancement**: Adds colored indicators to problem links showing solved status
-4. **Smart Caching**: Stores solved problems data to reduce API calls and improve performance
+4. **User Comparison**: Fetches and compares problem counts across multiple users
+5. **Smart Caching**: Stores solved problems data to reduce API calls and improve performance
 
 ## Technical Details
 
@@ -117,6 +133,11 @@ Feel free to contribute to this project by:
 This project is open source and available under the MIT License.
 
 ## Changelog
+
+### Version 1.2
+- Added user comparison feature on profile pages
+- Included problem ratings on submissions pages
+- Enhanced UI for comparison table
 
 ### Version 1.1
 - Added support for problemset page (`/problemset`)
