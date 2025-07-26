@@ -216,40 +216,106 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   const m = location.pathname.match(/^\/profile\/([^\/]+)/);
   if (!m) return;
   const pageUser = m[1];
-  const myUser = await new Promise(r=>{
-    chrome.storage.sync.get(['cf_username'], d=>r(d.cf_username||'b_i_b'));
-  });
+  const myUser = await new Promise(r=>{ chrome.storage.sync.get(['cf_username'], d=>r(d.cf_username||'b_i_b')); });
   if (pageUser === myUser) return;
 
   // load stored compare list
-  let compareList = await new Promise(r=>{
-    chrome.storage.local.get(['compare_list'], d=>r(d.compare_list||[]));
-  });
-  // ensure primary user is first
+  let compareList = await new Promise(r=>{ chrome.storage.local.get(['compare_list'], d=>r(d.compare_list||[])); });
   if (!compareList.includes(myUser)) compareList.unshift(myUser);
 
-  // render checkbox to add/remove this profile
+  // Create one wrapper for controls + table
+  // create and style wrapper panel
+  const wrapper = document.createElement('div');
+  wrapper.style =
+    'background:#ffffff; padding:12px; margin:12px 0; overflow-x:auto; ' +
+    'border:1px solid #ddd; border-radius:6px; ' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.05)';
+
+  // --- controls: include checkbox + toggle button ---
   const ui = document.createElement('div');
-  ui.style = 'margin:10px 0';
+  ui.style = 'margin-bottom:10px';
+
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.id = 'cf-compare-add';
   cb.checked = compareList.includes(pageUser);
+  cb.addEventListener('change', () => {
+    if (cb.checked) {
+      if (!compareList.includes(pageUser)) compareList.push(pageUser);
+    } else {
+      compareList = compareList.filter(u => u !== pageUser);
+    }
+    chrome.storage.local.set({compare_list: compareList}, () => location.reload());
+  });
+
   const label = document.createElement('label');
   label.htmlFor = 'cf-compare-add';
   label.textContent = ` Include ${pageUser} in comparison`;
+
   ui.appendChild(cb);
   ui.appendChild(label);
-  (document.querySelector('#pageContent')||document.body).appendChild(ui);
-  cb.addEventListener('change', () => {
-    if (cb.checked) {
-      compareList.push(pageUser);
-    } else {
-      compareList = compareList.filter(u=>u!==pageUser);
-    }
-    chrome.storage.local.set({compare_list: compareList});
-    location.reload();
+
+  // toggle button to show/hide batch-add inputs
+  const showBatchBtn = document.createElement('button');
+  showBatchBtn.textContent = 'Add multiple handles';
+  showBatchBtn.style = 'padding:4px 8px;font-size:12px;cursor:pointer;margin-left:10px';
+  {
+    showBatchBtn.style = 
+      'padding:6px 10px; font-size:13px; cursor:pointer; margin-left:10px; ' +
+      'background-color:#007bff; color:#fff; border:none; border-radius:4px; ' +
+      'transition:background-color .2s';
+    showBatchBtn.addEventListener('mouseover', () => 
+      showBatchBtn.style.backgroundColor = '#0056b3'
+    );
+    showBatchBtn.addEventListener('mouseout', () => 
+      showBatchBtn.style.backgroundColor = '#007bff'
+    );
+  }
+  ui.appendChild(showBatchBtn);
+
+  // batch-add area (hidden by default)
+  const batchDiv = document.createElement('div');
+  batchDiv.style = 'margin:5px 0 10px 20px;display:none';
+
+  const batchInput = document.createElement('input');
+  batchInput.type = 'text';
+  batchInput.placeholder = 'Enter handles (comma separated)';
+  batchInput.style = 'width:60%;padding:4px;margin-right:6px';
+
+  const batchBtn = document.createElement('button');
+  batchBtn.textContent = 'Add handles';
+  batchBtn.style = 'padding:4px 8px;font-size:12px;cursor:pointer';
+  {
+    batchBtn.style = 
+      'padding:6px 10px; font-size:13px; cursor:pointer; ' +
+      'background-color:#28a745; color:#fff; border:none; border-radius:4px; ' +
+      'transition:background-color .2s';
+    batchBtn.addEventListener('mouseover', () => 
+      batchBtn.style.backgroundColor = '#218838'
+    );
+    batchBtn.addEventListener('mouseout', () => 
+      batchBtn.style.backgroundColor = '#28a745'
+    );
+  }
+
+  batchBtn.addEventListener('click', () => {
+    const text = batchInput.value.trim();
+    if (!text) return;
+    const handles = text.split(/[\s,;]+/).map(h => h.trim()).filter(h => h);
+    handles.forEach(h => { if (!compareList.includes(h)) compareList.push(h); });
+    chrome.storage.local.set({ compare_list: compareList }, () => location.reload());
   });
+
+  showBatchBtn.addEventListener('click', () => {
+    batchDiv.style.display = batchDiv.style.display === 'none' ? 'block' : 'none';
+  });
+
+  batchDiv.appendChild(batchInput);
+  batchDiv.appendChild(batchBtn);
+
+  // append controls into wrapper
+  wrapper.appendChild(ui);
+  wrapper.appendChild(batchDiv);
 
   // fetch all problems → rating map
   const ratingMap = new Map();
@@ -384,16 +450,16 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     tbl.appendChild(mkRow(u, results[i], colors[i%colors.length]));
   });
 
-  // wrap and display
-  const container=document.createElement('div');
-  container.style='background:#f9f9f9;padding:10px;overflow-x:auto';
-  const title=document.createElement('h4');
-  title.textContent=`Solved count by rating: ${compareList.join(' vs ')}`;
-  title.style='margin:0 0 .5em';
-  container.appendChild(title);
-  tbl.style.display='block';
-  tbl.style.width='max-content';
-  container.appendChild(tbl);
-  (document.querySelector('#pageContent')||document.body).appendChild(container);
+  // title above table
+  const title = document.createElement('h4');
+  title.textContent = `Solved count by rating: ${compareList.join(' vs ')}`;
+  title.style = 'margin:0 0 .5em';
+
+  // append title + table into same wrapper
+  wrapper.appendChild(title);
+  wrapper.appendChild(tbl);
+
+  // finally insert the unified wrapper into the page
+  (document.querySelector('#pageContent')||document.body).appendChild(wrapper);
 })();
 
