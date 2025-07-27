@@ -217,18 +217,60 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   if (!m) return;
   const pageUser = m[1];
   const myUser = await new Promise(r=>{ chrome.storage.sync.get(['cf_username'], d=>r(d.cf_username||'b_i_b')); });
-  // if (pageUser === myUser) return;
 
   // load stored compare list
   let compareList = await new Promise(r=>{ chrome.storage.local.get(['compare_list'], d=>r(d.compare_list||[])); });
   if (!compareList.includes(myUser)) compareList.unshift(myUser);
 
-  // Create one wrapper for controls + table
+  // Add spinner animation style first
+  const spinnerStyle = document.createElement('style');
+  spinnerStyle.textContent = `
+    @keyframes cf-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .cf-loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      animation: cf-spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+  `;
+  document.head.appendChild(spinnerStyle);
+
+  // Create loading indicator immediately
+  const loadingWrapper = document.createElement('div');
+  loadingWrapper.id = 'cf-loading-indicator';
+  loadingWrapper.style = 
+    'background:#ffffff; padding:40px; margin:12px 0; text-align:center; ' +
+    'border:1px solid #ddd; border-radius:6px; ' +
+    'box-shadow:0 2px 4px rgba(0,0,0,0.05)';
+  
+  const loadingSpinner = document.createElement('div');
+  loadingSpinner.className = 'cf-loading-spinner';
+  
+  const loadingText = document.createElement('div');
+  loadingText.id = 'cf-loading-text';
+  loadingText.textContent = 'Loading comparison data...';
+  loadingText.style = 'color:#666; font-size:16px; font-weight:500;';
+  
+  loadingWrapper.appendChild(loadingSpinner);
+  loadingWrapper.appendChild(loadingText);
+  
+  // Insert loading indicator immediately where the table will be
+  const insertPoint = document.querySelector('#pageContent') || document.body;
+  insertPoint.appendChild(loadingWrapper);
+
+  // Create one wrapper for controls + table (but don't show it yet)
   const wrapper = document.createElement('div');
   wrapper.style =
     'background:#ffffff; padding:12px; margin:12px 0; overflow-x:auto; ' +
     'border:1px solid #ddd; border-radius:6px; ' +
-    'box-shadow:0 2px 4px rgba(0,0,0,0.05)';
+    'box-shadow:0 2px 4px rgba(0,0,0,0.05); display:none;';
 
   // Colors for handles - define early so it can be used throughout the code
   const handleColors = [
@@ -408,6 +450,12 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   const results = [];
   for (const u of compareList) {
     console.log(`Fetching data for user: ${u}`);
+    // Update loading text to show current progress
+    const progressText = document.getElementById('cf-loading-text');
+    if (progressText) {
+      progressText.textContent = `Loading data for ${u}... (${results.length + 1}/${compareList.length})`;
+    }
+    
     try {
       const d = await getCountsWithCache(u);
       results.push(d);
@@ -420,6 +468,12 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   }
 
   console.log('Completed loading data for all users');
+  
+  // Update loading text for final step
+  const progressText = document.getElementById('cf-loading-text');
+  if (progressText) {
+    progressText.textContent = 'Building comparison table...';
+  }
 
   // merge ratings keys
   const allKeys = [
@@ -795,8 +849,12 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     }
   });
 
-  // finally insert the unified wrapper into the page
-  const insertPoint = document.querySelector('#pageContent') || document.body;
+  // Hide loading indicator and show the actual table
+  const loadingIndicator = document.getElementById('cf-loading-indicator');
+  if (loadingIndicator) {
+    loadingIndicator.remove();
+  }
+  wrapper.style.display = 'block';
   insertPoint.appendChild(wrapper);
   console.log('Comparison table injected into page');
 })();
