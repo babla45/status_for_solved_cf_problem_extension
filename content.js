@@ -645,16 +645,20 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
         return false;
       }
       
-      // Reorder the compareList array
+      // Reorder the compareList and results arrays
       const draggedUser = compareList[draggedIndex];
+      const draggedResult = results[draggedIndex];
       console.log('Moving user:', draggedUser);
+      
       compareList.splice(draggedIndex, 1);
       compareList.splice(dropIndex, 0, draggedUser);
+      results.splice(draggedIndex, 1);
+      results.splice(dropIndex, 0, draggedResult);
       
-      // Save the new order and reload
+      // Save the new order (without reloading)
       chrome.storage.local.set({compare_list: compareList}, () => {
-        console.log('Saved new order, reloading...');
-        location.reload();
+        console.log('Saved new order, updating table...');
+        updateTableOrder();
       });
     }
 
@@ -669,6 +673,51 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     });
     draggedElement = null;
     draggedIndex = null;
+  }
+
+  // Function to update table order without reloading
+  function updateTableOrder() {
+    // Clear existing table rows (except header)
+    const existingRows = tbl.querySelectorAll('tr:not(:first-child)');
+    existingRows.forEach(row => row.remove());
+    
+    // Recreate rows in new order
+    compareList.forEach((u, i) => {
+      try {
+        if (i < results.length) {
+          const row = mkRow(u, results[i], i);
+          // Update data attributes for tooltip
+          row.dataset.handle = u;
+          row.dataset.color = handleColors[i % handleColors.length];
+          tbl.appendChild(row);
+        }
+      } catch (err) {
+        console.error(`Error creating row for ${u}:`, err);
+      }
+    });
+    
+    // Update the title to reflect new order
+    const newTitlePrefix = document.createElement('span');
+    newTitlePrefix.textContent = 'Solved count comparison by rating: ';
+    gradientContainer.innerHTML = '';
+    gradientContainer.appendChild(newTitlePrefix);
+    
+    compareList.forEach((handle, idx) => {
+      const handleSpan = document.createElement('span');
+      handleSpan.textContent = handle;
+      handleSpan.style.fontWeight = 'bold';
+      gradientContainer.appendChild(handleSpan);
+      
+      if (idx < compareList.length - 1) {
+        const vs = document.createElement('span');
+        vs.textContent = 'vs';
+        vs.style.fontWeight = 'normal';
+        vs.style.fontSize = '14px';
+        gradientContainer.appendChild(vs);
+      }
+    });
+    
+    console.log('Table updated successfully without reload');
   }
 
   // mkRow with improved hover effect and better styling
@@ -768,8 +817,20 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
       });
       
       btn.addEventListener('click', () => {
-        compareList = compareList.filter(u => u !== user);
-        chrome.storage.local.set({compare_list: compareList}, () => location.reload());
+        // Remove user from compareList and results arrays
+        const userToRemove = user;
+        const removeIndex = compareList.indexOf(userToRemove);
+        
+        if (removeIndex > -1) {
+          compareList.splice(removeIndex, 1);
+          results.splice(removeIndex, 1);
+          
+          // Save the updated list and update table without reload
+          chrome.storage.local.set({compare_list: compareList}, () => {
+            console.log('Removed user:', userToRemove);
+            updateTableOrder();
+          });
+        }
       });
       tdEx.appendChild(btn);
     } else {
