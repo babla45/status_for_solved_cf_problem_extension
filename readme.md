@@ -11,6 +11,9 @@ A Chrome extension that shows whether problems have been solved by a specific us
 - **Problem ratings**: Shows the difficulty rating of problems in submissions pages
 - **User comparison**: Compare solved problems across multiple users by rating
 - **Profile integration**: Add users to comparison directly from their profile pages
+- **Drag & Drop reordering**: Click and drag any handle to reorder users in the comparison table
+- **Handle tooltips**: Hover over any row to see the handle name in a floating tooltip
+- **Loading indicators**: Visual feedback while data is being loaded
 - **Contest and Gym support**: Shows status for both contest and gym problems (gym status may be limited due to API restrictions)
 - **Configurable username**: Easy-to-use popup interface for changing the target user
 - **Performance optimized**: Uses caching to minimize API calls
@@ -46,11 +49,14 @@ A Chrome extension that shows whether problems have been solved by a specific us
 2. You'll see a comparison panel with options to:
    - Include/exclude the current profile user in comparison
    - Add multiple handles via the "Add multiple handles" button
+   - **Reorder users**: Click and drag the drag handle (⋮⋮) next to any username to reorder them in the table
    - View a color-coded comparison table showing solved problems by rating
+   - Hover over any row to see the handle name in a tooltip
 3. The comparison table shows:
    - Number of problems solved by each user, grouped by rating
    - Total solved count for each user
    - Option to remove users from comparison
+   - Drag handles for reordering (except for the primary user)
 
 ### Supported Pages
 - User submissions pages: `/submissions/username`
@@ -133,6 +139,12 @@ Feel free to contribute to this project by:
 This project is open source and available under the MIT License.
 
 ## Changelog
+
+### Version 1.3
+- Added drag & drop functionality to reorder users in comparison table
+- Added hover tooltips showing handle names when hovering over table rows
+- Added loading indicators with progress updates during data fetching
+- Enhanced user experience with visual feedback
 
 ### Version 1.2
 - Added user comparison feature on profile pages

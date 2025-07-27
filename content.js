@@ -571,14 +571,125 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   // Colors for rows - restore the previous colors
   const colors = ['#d1e7ff','#fff3cd','#d4edda','#f8d7da','#e2e3e5'];
   
+  // Drag and drop event handlers - define these functions first
+  let draggedElement = null;
+  let draggedIndex = null;
+
+  function handleDragStart(e) {
+    console.log('Drag start triggered, target:', e.target);
+    console.log('Event clientX:', e.clientX, 'clientY:', e.clientY);
+    
+    // Check if the drag is starting from the sticky column area
+    const stickyColumn = this.querySelector('.sticky-column');
+    if (!stickyColumn) {
+      console.log('No sticky column found in this row');
+      e.preventDefault();
+      return false;
+    }
+    
+    // Get the bounds of the sticky column
+    const rect = stickyColumn.getBoundingClientRect();
+    const isDragFromStickyColumn = e.clientX >= rect.left && e.clientX <= rect.right &&
+                                   e.clientY >= rect.top && e.clientY <= rect.bottom;
+    
+    console.log('Sticky column bounds:', rect);
+    console.log('Is drag from sticky column:', isDragFromStickyColumn);
+    
+    // Only allow drag if the mouse is over the sticky column
+    if (!isDragFromStickyColumn) {
+      console.log('Preventing drag - not from sticky column area');
+      e.preventDefault();
+      return false;
+    }
+    
+    console.log('Drag allowed, starting drag for row:', this.dataset.userIndex);
+    draggedElement = this;
+    draggedIndex = parseInt(this.dataset.userIndex);
+    this.classList.add('cf-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', this.outerHTML);
+  }
+
+  function handleDragOver(e) {
+    if (e.preventDefault) {
+      e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+  }
+
+  function handleDragEnter(e) {
+    console.log('Drag enter on row:', this.dataset.userIndex);
+    if (this !== draggedElement) {
+      this.classList.add('cf-drag-over');
+    }
+  }
+
+  function handleDragLeave(e) {
+    this.classList.remove('cf-drag-over');
+  }
+
+  function handleDrop(e) {
+    console.log('Drop event triggered');
+    if (e.stopPropagation) {
+      e.stopPropagation();
+    }
+
+    if (this !== draggedElement) {
+      const dropIndex = parseInt(this.dataset.userIndex);
+      console.log('Dropping at index:', dropIndex, 'from index:', draggedIndex);
+      
+      // Don't allow moving to or from index 0 (primary user)
+      if (draggedIndex === 0 || dropIndex === 0) {
+        console.log('Cannot move primary user');
+        return false;
+      }
+      
+      // Reorder the compareList array
+      const draggedUser = compareList[draggedIndex];
+      console.log('Moving user:', draggedUser);
+      compareList.splice(draggedIndex, 1);
+      compareList.splice(dropIndex, 0, draggedUser);
+      
+      // Save the new order and reload
+      chrome.storage.local.set({compare_list: compareList}, () => {
+        console.log('Saved new order, reloading...');
+        location.reload();
+      });
+    }
+
+    return false;
+  }
+
+  function handleDragEnd(e) {
+    // Clean up drag styles
+    const rows = document.querySelectorAll('.cf-draggable-row');
+    rows.forEach(row => {
+      row.classList.remove('cf-dragging', 'cf-drag-over');
+    });
+    draggedElement = null;
+    draggedIndex = null;
+  }
+
   // mkRow with improved hover effect and better styling
   function mkRow(user, {cnt,total}, idx) {
     const bgColor = colors[idx % colors.length];
     const tr = document.createElement('tr');
+    tr.className = 'cf-draggable-row';
+    tr.draggable = true;
+    tr.dataset.userIndex = idx;
     tr.style = `
       background-color:${bgColor}; 
       transition: all 0.2s ease-in-out;
     `;
+    
+    // Add drag event listeners only to the row
+    tr.addEventListener('dragstart', handleDragStart);
+    tr.addEventListener('dragover', handleDragOver);
+    tr.addEventListener('drop', handleDrop);
+    tr.addEventListener('dragend', handleDragEnd);
+    tr.addEventListener('dragenter', handleDragEnter);
+    tr.addEventListener('dragleave', handleDragLeave);
     
     // Add improved hover effect with more subtle highlight
     tr.addEventListener('mouseover', () => {
@@ -604,7 +715,7 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
       }
     });
     
-    // User cell with colored username matching the title - make sticky
+    // User cell with colored username - make sticky
     const td0 = document.createElement('td');
     td0.className = 'sticky-column';
     td0.style = `
@@ -614,6 +725,8 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
       color: ${handleColors[idx % handleColors.length]};
       background-color: ${bgColor}; /* Match row color */
     `;
+    
+    // Only add the username text, no drag handle icon
     td0.textContent = user;
     tr.appendChild(td0);
     
@@ -783,6 +896,34 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   tableContainer.appendChild(tbl);
   wrapper.appendChild(tableContainer);
 
+  // Add style for drag and drop functionality
+  const dragDropStyle = document.createElement('style');
+  dragDropStyle.textContent = `
+    .cf-draggable-row {
+      user-select: none;
+    }
+    
+    .cf-draggable-row .sticky-column {
+      cursor: move !important;
+    }
+    
+    .cf-draggable-row .sticky-column:hover {
+      background-color: rgba(108, 92, 231, 0.15) !important;
+    }
+    
+    .cf-dragging {
+      opacity: 0.5 !important;
+      transform: rotate(5deg) !important;
+      z-index: 1000 !important;
+      position: relative !important;
+    }
+    
+    .cf-drag-over {
+      border-top: 3px solid #6c5ce7 !important;
+    }
+  `;
+  document.head.appendChild(dragDropStyle);
+
   // Add tooltip functionality
   const tooltipStyle = document.createElement('style');
   tooltipStyle.textContent = `
@@ -856,6 +997,6 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
   }
   wrapper.style.display = 'block';
   insertPoint.appendChild(wrapper);
-  console.log('Comparison table injected into page');
+  console.log('Comparison table injected into page with drag & drop support');
 })();
 
