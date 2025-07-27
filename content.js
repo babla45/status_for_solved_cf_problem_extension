@@ -286,7 +286,122 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
 
   // Create UI controls container first
   const ui = document.createElement('div');
-  ui.style = 'margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; gap:10px';
+  ui.style = 'margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; position:relative;';
+
+  // Add settings icon and dropdown in top-right corner
+  const settingsContainer = document.createElement('div');
+  settingsContainer.style = 'position:absolute; top:0; right:0; z-index:10;';
+  
+  const settingsIcon = document.createElement('button');
+  settingsIcon.innerHTML = '⚙️';
+  settingsIcon.style = 
+    'background:none; border:none; font-size:20px; cursor:pointer; ' +
+    'padding:8px; border-radius:50%; transition:all 0.2s;';
+  
+  settingsIcon.addEventListener('mouseover', () => {
+    settingsIcon.style.backgroundColor = 'rgba(0,0,0,0.1)';
+    settingsIcon.style.transform = 'rotate(90deg)';
+  });
+  
+  settingsIcon.addEventListener('mouseout', () => {
+    settingsIcon.style.backgroundColor = 'transparent';
+    settingsIcon.style.transform = 'rotate(0deg)';
+  });
+  
+  const settingsDropdown = document.createElement('div');
+  settingsDropdown.style = 
+    'position:absolute; top:100%; right:0; background:white; ' +
+    'border:1px solid #ddd; border-radius:6px; padding:12px; ' +
+    'box-shadow:0 4px 12px rgba(0,0,0,0.15); display:none; ' +
+    'min-width:200px; z-index:1000;';
+  
+  // Font weight toggle
+  const fontWeightContainer = document.createElement('div');
+  fontWeightContainer.style = 'margin-bottom:8px;';
+  
+  const fontWeightLabel = document.createElement('label');
+  fontWeightLabel.textContent = 'Data cells font weight:';
+  fontWeightLabel.style = 'display:block; font-size:14px; margin-bottom:6px; font-weight:500;';
+  
+  const fontWeightToggle = document.createElement('div');
+  fontWeightToggle.style = 'display:flex; gap:8px;';
+  
+  const boldOption = document.createElement('button');
+  boldOption.textContent = 'Bold';
+  boldOption.style = 
+    'padding:6px 12px; border:1px solid #ddd; border-radius:4px; ' +
+    'background:white; color:#666; cursor:pointer; font-size:12px; ' +
+    'transition:all 0.2s;';
+  
+  const normalOption = document.createElement('button');
+  normalOption.textContent = 'Normal';
+  normalOption.style = 
+    'padding:6px 12px; border:1px solid #ddd; border-radius:4px; ' +
+    'background:#6c5ce7; color:white; cursor:pointer; font-size:12px; ' +
+    'transition:all 0.2s;';
+  
+  // Load saved preference
+  let dataCellsBold = false; // Changed default to false (normal)
+  chrome.storage.local.get(['cf_data_cells_bold'], (result) => {
+    dataCellsBold = result.cf_data_cells_bold === true; // Default to false
+    updateFontWeightButtons();
+    updateTableCellStyles();
+  });
+  
+  function updateFontWeightButtons() {
+    if (dataCellsBold) {
+      boldOption.style.background = '#6c5ce7';
+      boldOption.style.color = 'white';
+      normalOption.style.background = 'white';
+      normalOption.style.color = '#666';
+    } else {
+      boldOption.style.background = 'white';
+      boldOption.style.color = '#666';
+      normalOption.style.background = '#6c5ce7';
+      normalOption.style.color = 'white';
+    }
+  }
+  
+  function updateTableCellStyles() {
+    const dataCells = document.querySelectorAll('.cf-compare-table-container td:not(.sticky-column):not(.cf-total-cell):not(.cf-action-cell)');
+    dataCells.forEach(cell => {
+      cell.style.fontWeight = dataCellsBold ? 'bold' : 'normal';
+    });
+  }
+  
+  boldOption.addEventListener('click', () => {
+    dataCellsBold = true;
+    chrome.storage.local.set({cf_data_cells_bold: true});
+    updateFontWeightButtons();
+    updateTableCellStyles();
+  });
+  
+  normalOption.addEventListener('click', () => {
+    dataCellsBold = false;
+    chrome.storage.local.set({cf_data_cells_bold: false});
+    updateFontWeightButtons();
+    updateTableCellStyles();
+  });
+  
+  fontWeightToggle.appendChild(boldOption);
+  fontWeightToggle.appendChild(normalOption);
+  fontWeightContainer.appendChild(fontWeightLabel);
+  fontWeightContainer.appendChild(fontWeightToggle);
+  settingsDropdown.appendChild(fontWeightContainer);
+  
+  settingsIcon.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settingsDropdown.style.display = settingsDropdown.style.display === 'none' ? 'block' : 'none';
+  });
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', () => {
+    settingsDropdown.style.display = 'none';
+  });
+  
+  settingsContainer.appendChild(settingsIcon);
+  settingsContainer.appendChild(settingsDropdown);
+  ui.appendChild(settingsContainer);
 
   // Create checkbox and label
   const cb = document.createElement('input');
@@ -783,18 +898,20 @@ if (window.location.pathname.includes('/submissions/') || window.location.pathna
     ratings.forEach(r => {
       const td = document.createElement('td');
       td.textContent = cnt.get(r) || 0;
-      td.style = 'border:1px solid #ccc; padding:8px; text-align:center;';
+      td.style = `border:1px solid #ccc; padding:8px; text-align:center; font-weight:${dataCellsBold ? 'bold' : 'normal'};`;
       tr.appendChild(td);
     });
     
     // Total cell with highlighted background
     const tdTot = document.createElement('td');
+    tdTot.className = 'cf-total-cell';
     tdTot.textContent = total;
     tdTot.style = 'border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; background-color:rgba(0,0,0,0.03);';
     tr.appendChild(tdTot);
     
     // Exclude button cell
     const tdEx = document.createElement('td');
+    tdEx.className = 'cf-action-cell';
     tdEx.style = 'border:1px solid #ccc; padding:6px; text-align:center;';
     
     // Don't allow removing the primary user (first in list)
